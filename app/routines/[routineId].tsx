@@ -10,6 +10,7 @@ import {
     TimerStep,
 } from "@/lib/routines";
 import { useKeepAwake } from "expo-keep-awake";
+import * as Notifications from "expo-notifications";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
     ArrowRightIcon,
@@ -101,31 +102,94 @@ const TimerRoutineStepView = ({
 }: TimerRoutineStepProps) => {
     const [timeLeft, setTimeLeft] = useState(durationSeconds);
     const [isActive, setIsActive] = useState(!!autoStart);
+
+    const endTimeRef = useRef<number | null>(null);
     const intervalRef = useRef<number | null>(null);
+    const notificationId = useRef<string | null>(null);
 
-    // Logic to handle the countdown
+    // Request Permissions on mount
     useEffect(() => {
-        if (!isActive) return;
-        if (timeLeft > 0) {
-            intervalRef.current = setInterval(() => {
-                setTimeLeft((prev) => prev - 1);
-            }, 1000);
-        } else {
-            setIsActive(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
-
-            // Android: Vibrate 500ms, pause 500ms, vibrate 500ms (Buzz twice)
-            // iOS: Ignores the pattern and vibrates once for the system default time.
-            if (Platform.OS === "android") {
-                Vibration.vibrate([0, 500, 500, 500]);
-            } else {
-                Vibration.vibrate();
+        (async () => {
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status !== "granted") {
+                await Notifications.requestPermissionsAsync();
             }
+        })();
+    }, []);
+
+    // Helper to kill any pending notification
+    const cancelNotification = async () => {
+        if (notificationId.current) {
+            await Notifications.cancelScheduledNotificationAsync(
+                notificationId.current
+            );
+            notificationId.current = null;
         }
+    };
+
+    // Helper to schedule a new notification
+    const scheduleNotification = async (seconds: number) => {
+        // Cancel any existing one first to be safe
+        await cancelNotification();
+
+        // Schedule for exactly when the timer hits 0
+        const id = await Notifications.scheduleNotificationAsync({
+            content: {
+                title: "Time's up! ⏰",
+                body: "Your routine step is complete.",
+                sound: true, // This ensures sound plays on iOS/Android
+            },
+            trigger: {
+                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+                seconds: seconds,
+            },
+        });
+        notificationId.current = id;
+    };
+
+    // The main Tick Logic
+    useEffect(() => {
+        if (isActive && endTimeRef.current === null) {
+            // Initial start or Auto-start
+            endTimeRef.current = Date.now() + timeLeft * 1000;
+            // Schedule notification for the future
+            scheduleNotification(timeLeft);
+        }
+
+        if (isActive) {
+            intervalRef.current = setInterval(() => {
+                if (!endTimeRef.current) return;
+
+                const now = Date.now();
+                const remaining = Math.ceil((endTimeRef.current - now) / 1000);
+
+                if (remaining <= 0) {
+                    // --- TIMER FINISHED ---
+                    setTimeLeft(0);
+                    setIsActive(false);
+                    endTimeRef.current = null;
+                    if (intervalRef.current) clearInterval(intervalRef.current);
+
+                    // We don't need to manually vibrate here if the notification
+                    // fired while backgrounded. But if we are in the foreground,
+                    // the notification is suppressed (by our config), so we vibrate manually.
+                    if (Platform.OS === "android") {
+                        Vibration.vibrate([0, 500, 500, 500]);
+                    } else {
+                        Vibration.vibrate();
+                    }
+                } else {
+                    setTimeLeft(remaining);
+                }
+            }, 200);
+        } else {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [isActive, timeLeft]);
+    }, [isActive]);
 
     // Format seconds into MM:SS
     const formatTime = (seconds: number) => {
@@ -136,14 +200,30 @@ const TimerRoutineStepView = ({
             .padStart(2, "0")}`;
     };
 
-    const toggleTimer = () => {
-        if (timeLeft > 0) setIsActive(!isActive);
-        else resetTimer();
+    const toggleTimer = async () => {
+        if (timeLeft === 0) {
+            resetTimer();
+            return;
+        }
+
+        if (isActive) {
+            // PAUSE
+            setIsActive(false);
+            endTimeRef.current = null;
+            await cancelNotification(); // Stop the OS from alerting us
+        } else {
+            // RESUME
+            setIsActive(true);
+            endTimeRef.current = Date.now() + timeLeft * 1000;
+            await scheduleNotification(timeLeft); // Tell OS to alert us in remaining seconds
+        }
     };
 
-    const resetTimer = () => {
+    const resetTimer = async () => {
         setIsActive(false);
+        endTimeRef.current = null;
         setTimeLeft(durationSeconds);
+        await cancelNotification();
     };
 
     return (
