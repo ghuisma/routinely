@@ -9,6 +9,7 @@ import {
     TextAreaStep,
     TimerStep,
 } from "@/lib/routines";
+import { useKeepAwake } from "expo-keep-awake";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
     ArrowRightIcon,
@@ -167,6 +168,7 @@ const TimerRoutineStepView = ({
                         size="icon"
                         className="size-16 rounded-full"
                         onPress={toggleTimer}
+                        onLongPress={resetTimer}
                     >
                         {isActive ? (
                             <PauseIcon size={32} color="#fafafa" /> // #fafafa is `text-secondary-foreground`, somehow the className prop doesn't work here
@@ -260,6 +262,7 @@ const RoutineCompleteView = () => {
 };
 
 const RoutineScreen = ({ title, steps: _steps }: Routine) => {
+    useKeepAwake();
     const router = useRouter();
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [isEmergency, setIsEmergency] = useState(false);
