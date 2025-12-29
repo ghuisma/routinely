@@ -271,20 +271,20 @@ const bioHackRoutine: Routine = {
             isEmergencySafe: false, // Emergency: Skip.
         },
         {
-            id: "step_teeth_morning",
-            type: "simple",
-            title: "Brush Teeth",
-            icon: "🪥",
-            description: "Brush now while in the bathroom context.",
-            isEmergencySafe: true, // CRITICAL: Hygiene.
-        },
-        {
             id: "step_dress_up",
             type: "simple",
             title: "Human Mode",
             icon: "👔",
             description: 'Change into "Pile B" (Real Clothes).',
             isEmergencySafe: true, // CRITICAL: Must get dressed.
+        },
+        {
+            id: "step_teeth_morning",
+            type: "simple",
+            title: "Brush Teeth",
+            icon: "🪥",
+            description: "Brush now while in the bathroom context.",
+            isEmergencySafe: true, // CRITICAL: Hygiene.
         },
         {
             id: "step_groom",
@@ -402,6 +402,14 @@ const eveningRoutine: Routine = {
             icon: "🦷",
             description: "Floss between all teeth.",
             isEmergencySafe: false, // Emergency: Skip if too tired/late.
+        },
+        {
+            id: "step_fill_water",
+            type: "simple",
+            title: "Fill Tank",
+            icon: "🚰",
+            description: "Fill water bottle and place on desk.",
+            isEmergencySafe: true, // CRITICAL: Reduces morning friction.
         },
         {
             id: "step_clear_digital",
